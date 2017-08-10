@@ -9,6 +9,8 @@
 #include "Eigen-3.3/Eigen/QR"
 #include "json.hpp"
 #include "spline.h"
+#include "vehicle.h"
+#include <map>
 
 using namespace std;
 
@@ -23,8 +25,11 @@ double ref_vel = 0; //mph
 constexpr double pi() { return M_PI; }
 double deg2rad(double x) { return x * pi() / 180; }
 double rad2deg(double x) { return x * 180 / pi(); }
+
+// For converting back and forth between mph and meters per second.
 double mph2mtps(double x) { return x * 1609 /3600; }
 double mtps2mph(double x) { return x * 3600 /3600; }
+
 
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
@@ -244,7 +249,13 @@ int main() {
           	// Sensor Fusion Data, a list of all other cars on the same side of the road.
           	auto sensor_fusion = j[1]["sensor_fusion"];
 
+
+            double car_vx = car_speed*cos(car_yaw);
+            double car_vy = car_speed*sin(car_yaw);
+            Vehicle autonomus_car(car_x, car_y, car_vx, car_vy,car_s, car_d, 0.0, 0.0);
+
             int prev_size = previous_path_x.size();
+            map<int,Vehicle> vehicles = {};
 
 
             if(prev_size > 0)
@@ -257,12 +268,37 @@ int main() {
             //find ref_v to use
             for(int i=0; i < sensor_fusion.size(); i++)
             {
+              /*
+              --------------Vehicle class start---------------------
+              */
+              
+              
+              int id = sensor_fusion[i][0];
+              double x = sensor_fusion[i][1];
+              double y = sensor_fusion[i][2];
+              double vx = sensor_fusion[i][3];
+              double vy = sensor_fusion[i][4];
+              double s = sensor_fusion[i][5]; 
+              double d = sensor_fusion[i][6];  
+
+              //Vehicle new_v;
+              Vehicle new_v(x, y, vx, vy, s, d, 0.0, 0.0);
+
+              vehicles.emplace(id,new_v);
+
+
+              /*
+              --------------Vehicle class finish ---------------------
+              */
+
+
               //check if there is a car in my lane
-              float d = sensor_fusion[i][6];
+              
+              //cout<<d<<endl;
               if(d < (2+4*lane+2) && d > (2+4*lane-2))
               {
-                double vx = sensor_fusion[i][3];
-                double vy = sensor_fusion[i][4];                
+                //double vx = sensor_fusion[i][3];
+                //double vy = sensor_fusion[i][4];                
                 double check_speed = sqrt(vx*vx+vy*vy);
                 double check_car_s = sensor_fusion[i][5];
 
@@ -291,6 +327,20 @@ int main() {
 
 
             }
+
+            map<int,vector<map<string,double>>> predictions = {};
+            for(int id=0; id < sensor_fusion.size(); id++)
+              {
+                Vehicle vehicle = vehicles.at(id);
+                vector<map<string,double>> preds = vehicle.generate_predictions();
+                predictions.emplace(id,preds);
+
+              }
+
+            autonomus_car.update_state(predictions);
+            //autonomus_car.get_state();
+
+
 
             //acceleration of 5m/s2
             if (too_close)
