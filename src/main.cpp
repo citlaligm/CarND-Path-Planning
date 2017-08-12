@@ -263,6 +263,7 @@ int main() {
             double speed_limit = 49.5;
             int lanes_available =  3;
             double max_acceleration = 0.5; 
+            lane = autonomus_car.get_lane();
 
 
             //autonomus_car.configure(speed_limit, lanes_available, max_acceleration);
@@ -273,12 +274,13 @@ int main() {
 
 
             int prev_size = previous_path_x.size();
-            map<int,Vehicle> vehicles;
+            //map<int,Vehicle> vehicles;
 
 
             if(prev_size > 0)
             {
-              car_s = end_path_s;
+              autonomus_car.set_s(end_path_s);
+              car_s = autonomus_car.get_s();
             }
 
             bool too_close = false;
@@ -301,10 +303,10 @@ int main() {
 
               //Vehicle new_v;
               //cout<<"lane_d: "<<d<<endl;
-              Vehicle new_v;
-              new_v.Init(x, y, vx, vy, s, d, 0.0, 0.0);
+              //Vehicle new_v;
+              //new_v.Init(x, y, vx, vy, s, d, 0.0, 0.0);
               //cout<<"id simulator: "<<id<<endl;
-              vehicles.emplace(id,new_v);
+              //vehicles.emplace(id,new_v);
 
 
               /*
@@ -314,10 +316,10 @@ int main() {
 
               //check if there is a car in my lane
               
-              cout<<autonomus_car.get_lane()<<endl;
-              if(d < (2+4*autonomus_car.get_lane()+2) && d > (2+4*autonomus_car.get_lane()-2))
+              //cout<<autonomus_car.get_lane()<<endl;
+              if(d < (2+4*lane+2) && d > (2+4*lane-2))
               {
-                cout<<"check"<<endl;
+                //cout<<"check"<<endl;
                 //double vx = sensor_fusion[i][3];
                 //double vy = sensor_fusion[i][4];                
                 double check_speed = sqrt(vx*vx+vy*vy);
@@ -328,7 +330,7 @@ int main() {
                 check_car_s += ((double)prev_size*.02*check_speed);
 
                 //check if s values greater than mine and s gap
-                if((check_car_s > autonomus_car.get_s()) && ((check_car_s-autonomus_car.get_s()) < 30)) //30mts
+                if((check_car_s > car_s) && ((check_car_s-car_s) < 30)) //30mts
                 {
                   //TODO: lower speed
                   //TODO: lower reference velocity so we don't crash with car in front of us
@@ -352,26 +354,26 @@ int main() {
 
             map<int,vector<map<string,double>>> predictions;
             
-            for(int id=0; id < sensor_fusion.size(); id++)
-              {
-                Vehicle vehicle = vehicles.at(id);
-                //cout<<"v_lane: "<<vehicle.get_lane()<<endl;
-                //cout<<"for: "<<id<<endl;
-                vector<map<string,double>> preds = vehicle.generate_predictions();
+            // for(int id=0; id < sensor_fusion.size(); id++)
+            //   {
+            //     //Vehicle vehicle = vehicles.at(id);
+            //     //cout<<"v_lane: "<<vehicle.get_lane()<<endl;
+            //     //cout<<"for: "<<id<<endl;
+            //     //vector<map<string,double>> preds = vehicle.generate_predictions();
                 
-                for(auto& p: preds){
-                  std::map<string, double> map = p;
-                  //for(auto& mi : map){ std::cout << mi.first << ": " << mi.second <<endl;}
+            //     // for(auto& p: preds){
+            //     //   std::map<string, double> map = p;
+            //     //   //for(auto& mi : map){ std::cout << mi.first << ": " << mi.second <<endl;}
                   
-                }
+            //     // }
 
                 
 
-                predictions.emplace(id,preds);
+            //     predictions.emplace(id,preds);
 
-              }
+            //   }
 
-            autonomus_car.update_state(predictions);
+            //autonomus_car.update_state(predictions);
             //cout<<autonomus_car.get_state()<<endl;
 
 
@@ -440,7 +442,7 @@ int main() {
 
             std::vector<double> next_wp0 = getXY(car_s + space, target_lane, map_waypoints_s, map_waypoints_x, map_waypoints_y);
             std::vector<double> next_wp1 = getXY(car_s + 2*space, target_lane, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-            std::vector<double> next_wp2 = getXY(car_s + 3*space, target_lane, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+            std::vector<double> next_wp2 = getXY(car_s+ 3*space, target_lane, map_waypoints_s, map_waypoints_x, map_waypoints_y);
             
             ptsx.push_back(next_wp0[0]);
             ptsx.push_back(next_wp1[0]);
