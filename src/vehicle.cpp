@@ -5,10 +5,10 @@
 #include <iostream>
 #include <thread>
 #include <vector>
-//#include "Eigen-3.3/Eigen/Core"
-//#include "Eigen-3.3/Eigen/QR"
-//#include "json.hpp"
-//#include "spline.h"
+#include "Eigen-3.3/Eigen/Core"
+#include "Eigen-3.3/Eigen/QR"
+#include "json.hpp"
+#include "spline.h"
 #include "vehicle.h"
 #include "Snapshot.h"
 
@@ -21,11 +21,12 @@
 
 
 
+
+Vehicle::Vehicle(){}
+
 using namespace std;
-//Vehicle::Vehicle(){}
 
-
-Vehicle::Vehicle(double x, double y, double vx, double vy, double s, double d, double distance, double acceleration)
+void Vehicle::Init(double x, double y, double vx, double vy, double s, double d, double distance, double acceleration)
   {
   	_x = x;
   	_y = y;
@@ -41,7 +42,7 @@ Vehicle::Vehicle(double x, double y, double vx, double vy, double s, double d, d
   	else{_lane = 100;}
   	_acc = acceleration;
   	_state = "CS";
-  	_target_speed = NULL;
+  	_speed_limit = NULL;
   	_lanes_available = NULL;
   	_max_acc = NULL;
 
@@ -76,7 +77,7 @@ string Vehicle::get_state(){return _state;}
 int Vehicle::get_lane(){return _lane;}
 double Vehicle::get_acc(){return _acc;}
 double Vehicle::get_velocity(){return _v;}
-double Vehicle::get_target_speed(){return _target_speed;}
+double Vehicle::get_speed_limit(){return _speed_limit;}
 double Vehicle::get_max_acc(){return _max_acc;}
 
 
@@ -89,11 +90,11 @@ void Vehicle::set_s(double s){_s = s;}
 void Vehicle::set_velocity(double velocity){_v = velocity;}
 void Vehicle::set_acc(double acc){_acc = acc;}
 void Vehicle::set_state(string state){_state = state;}
-void Vehicle::set_target_speed(double speed){_target_speed = speed;}
+void Vehicle::set_speed_limit(double speed){_speed_limit = speed;}
 
-void Vehicle::configure(double target_speed, int lanes_available, double max_acceleration)
+void Vehicle::configure(double speed_limit, int lanes_available, double max_acceleration)
 {
-  _target_speed = target_speed;
+  _speed_limit = speed_limit;
   _lanes_available = lanes_available;
   _max_acc = max_acceleration;
 }
@@ -116,42 +117,123 @@ Snapshot Vehicle::take_snapshot(){
 }
 
 
-double Vehicle::max_accel_for_lane(vector<map<string,double>>predictions, int lane, double s)
+double Vehicle::max_accel_for_lane(map<int,vector<map<string,double>>>&predictions, int lane, double s)
 {
-  vector<Vehicle>in_front;
-  double delta_v_til_target = get_target_speed() - get_velocity();
+  //cout<<"max_acc"<<endl;
+  vector<map<string, double>>in_front;
+  double delta_v_til_target = get_speed_limit() - get_velocity();
   double max_acc = min(get_max_acc(), delta_v_til_target);
-  for(auto pred: predictions)
-  {
-    double s = pred.at("s");
-    int lane = pred.at("lane");
+  //cout<<predictions.size()<<endl;
 
 
-  }
+  vector<map<string,double>> preds;
 
-  return 0.0;
+
+  for (auto p: predictions){
+    //cout<<"for"<<endl;
+    vector<std::map<string, double>> vec;
+    int id = p.first;
+    vec = p.second;
+    //cout<<vec.size()<<endl;
+    std::map<string, double> first_veh = vec[0];
+
+    int s = first_veh.at("s");
+    int lane = int(first_veh.at("lane"));
+
+    if(get_lane() != lane || s < get_s())
+      {
+        predictions.erase(id);
+        
+      }
+    } 
+    double min_s = 100000;
+    int index = 0;
+    vector<std::map<string, double>> leading_vec;
+
+    if(predictions.size()>0)
+    {
+      for (auto& x: predictions)
+      {
+        vector<std::map<string, double>> v;
+        int id = x.first;
+        v = x.second;
+        std::map<string, double> map2 = v[0];
+
+        double s = map2.at("s");
+        int lane = map2.at("lane");
+
+        double diff = s - get_s();
+        if (diff < min_s)
+          {
+            min_s = s;
+            leading_vec = v;
+          }
+
+      }
+
+    }
+
+    //cout<<"min: "<< min_s<<"\t my_s: "<<get_s()<<"\t diff: "<<min_s - s<<endl;
+    
+    // for(auto&v : leading_vec)
+    // {
+    //   std::map<string, double> map2 = v;
+    //   int s = map2.at("s");
+    //   int lane = map2.at("lane");
+    //   //cout<<"s: "<<s<<"\t lane: "<<lane<<endl;
+    // }
+    //cout<<"size: "<<leading_vec.size()<<endl;
+    if (leading_vec.size()>0){
+      //cout<<leading_vec.size()<<endl;
+      std::map<string, double> leading = leading_vec[1];
+      double next_position = leading.at("s");
+      double my_next_position = get_s() + get_velocity();
+      double separation_next = next_position - my_next_position;
+      double available_room = separation_next - preferred_buffer;
+      max_acc = min(max_acc, available_room);
+      cout<<max_acc<<endl;
+    }
+
+  return max_acc;
+}
+
+void Vehicle::increment(int dt){
+  set_s(get_s()+(get_velocity()*dt));
+  set_velocity(get_velocity()+(get_acc()*dt));
 
 }
 
 
-void Vehicle::execute_constant_speed(){set_velocity(0.0);}
-void Vehicle::execute_keep_lane(vector<map<string,double>>predictions){}
-void Vehicle::execute_lane_change(vector<map<string,double>>predictions, string dir)
+void Vehicle::execute_constant_speed(){
+  set_velocity(49.5);
+
+}
+
+void Vehicle::execute_keep_lane(map<int,vector<map<string,double>>> &predictions )
+{
+  set_acc(max_accel_for_lane(predictions, get_lane(), get_s()));
+}
+
+void Vehicle::execute_lane_change(map<int,vector<map<string,double>>> &predictions, string dir)
 {
   int delta = -1;
   if(dir == "R"){delta = 1;}
   set_lane(get_lane()+ delta) ;
+  set_acc(max_accel_for_lane(predictions, get_lane(), get_s()));
+}
 
+void Vehicle::execute_prep_lane_change(map<int,vector<map<string,double>>> &predictions, string dir)
+{
+  
 
 
 
 }
-void Vehicle::execute_prep_lane_change(vector<map<string,double>>predictions, string dir){}
 
 
 
 
-void Vehicle::execute_state(vector<map<string,double>>predictions)
+void Vehicle::execute_state(map<int,vector<map<string,double>>> &predictions)
 {
   string state = get_state();
   if (state == "CS") {execute_constant_speed();}
@@ -165,7 +247,7 @@ void Vehicle::execute_state(vector<map<string,double>>predictions)
 }
 
 
-void Vehicle::_trajectory_for_state(string state,vector<map<string,double>>predictions, int horizon){
+vector<Snapshot> Vehicle::_trajectory_for_state(string state,map<int,vector<map<string,double>>> &predictions, int horizon){
   Snapshot snapshot = take_snapshot();
 
 
@@ -176,17 +258,27 @@ void Vehicle::_trajectory_for_state(string state,vector<map<string,double>>predi
   {
     restore_from_snapshot(snapshot);
     set_state(state);
+    execute_state(predictions);
+    increment();
+    trajectory.push_back(take_snapshot());
 
+    //remove first prediction for each vehicle
+    for (auto p: predictions){
+        //cout<<"for"<<endl;
+        vector<std::map<string, double>> vec;
+        int id = p.first;
+        vec = p.second;
+        vec.erase(vec.begin(),vec.begin()+1);
+     }
+   }
 
-
-
-  }
-
-
+  restore_from_snapshot(snapshot);
+  //cout<<"size traj: "<<trajectory.size()<<endl;
+  return trajectory;
 }
 
 
-string Vehicle::_get_next_state(map<int,vector<map<string,double>>> predictions)
+string Vehicle::_get_next_state(map<int,vector<map<string,double>>> &predictions)
 {
   //cout<<"***_get_next_state***"<<endl;
   vector<string> states = {"KL","LCL","LCR"};
@@ -203,17 +295,26 @@ string Vehicle::_get_next_state(map<int,vector<map<string,double>>> predictions)
   }
 
   vector<double> costs;
-  cout<<"***************"<<endl;
+  double a = max_accel_for_lane(predictions, get_lane(), get_s());
+
+  //cout<<"a: "<<a<<endl;
+
+  // //cout<<"***************"<<endl;
+  // // for(auto state:states)
+  // // {
+
+  // //   cout<<state<<endl;
+
+  // // }
+  // //cout<<"***************"<<endl;
+
+
   for(auto state:states)
-  {
+    {
+      vector<Snapshot> trajectory = _trajectory_for_state(state, predictions);
+      //cout<<trajectory.size()<<endl;
 
-    cout<<state<<endl;
-
-  }
-  cout<<"***************"<<endl;
-
-
-  //for(auto state:states){cout<<state<<endl;}
+    }
   return states[2];
 }
 
@@ -225,25 +326,28 @@ string Vehicle::_get_next_state(map<int,vector<map<string,double>>> predictions)
 vector<double> Vehicle::state_at(double t){
   double s =  get_s() +  get_velocity()*t + get_acc()*t*t/2.0;
   double v = get_velocity()+ get_acc()*t;
+  //cout<<"lane_func: "<<get_lane()<<endl;
   return vector<double> {double(get_lane()), s, v, get_acc()};
 }
 
 //Generate predictions of where other cars will be in a horizon
 std::vector<map<string,double>> Vehicle::generate_predictions(double horizon){
   std::vector<map<string,double>> predictions;
+  //cout<<"lane_gen: "<<get_lane()<<endl;
    for(int i=0; i<horizon;i++){
-     int lane = int(state_at(i)[0]);
+     double lane = double(get_lane());//int(state_at(i)[0]);
      double s = state_at(i)[1];
-     map<string,double> data = {{"s",0},{"lane",0}};
-     data.at("s") = s;
-     data.at("lane") = double(lane);
+     
+     map<string,double> data;
+     data.emplace("s",s);
+     data.emplace("lane", lane);
      predictions.push_back(data);
    }
   return predictions;
 }
 
 
-void Vehicle::update_state(map<int,vector<map<string,double>>>  predictions){
+void Vehicle::update_state(map<int,vector<map<string,double>>> &predictions){
   //cout<<"***update_state***"<<endl;
   string state = Vehicle::_get_next_state(predictions);
   Vehicle::set_state (state);

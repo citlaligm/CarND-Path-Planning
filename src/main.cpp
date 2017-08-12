@@ -11,6 +11,8 @@
 #include "spline.h"
 #include "vehicle.h"
 #include <map>
+#include <iostream>
+#include <string>
 
 using namespace std;
 
@@ -208,11 +210,11 @@ int main() {
   	map_waypoints_dy.push_back(d_y);
   }
 
-  
+  Vehicle autonomus_car;
 
 
 
-  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy, &autonomus_car](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -252,10 +254,26 @@ int main() {
 
             double car_vx = car_speed*cos(car_yaw);
             double car_vy = car_speed*sin(car_yaw);
-            Vehicle autonomus_car(car_x, car_y, car_vx, car_vy,car_s, car_d, 0.0, 0.0);
+            
+            /*
+              --------------AV configuration---------------------
+            */
+
+            autonomus_car.Init(car_x, car_y, car_vx, car_vy, car_s, car_d, 0.0, 0.0);
+            double speed_limit = 49.5;
+            int lanes_available =  3;
+            double max_acceleration = 0.5; 
+
+
+            //autonomus_car.configure(speed_limit, lanes_available, max_acceleration);
+
+            /*
+              --------------AV configuration---------------------
+            */
+
 
             int prev_size = previous_path_x.size();
-            map<int,Vehicle> vehicles = {};
+            map<int,Vehicle> vehicles;
 
 
             if(prev_size > 0)
@@ -282,8 +300,10 @@ int main() {
               double d = sensor_fusion[i][6];  
 
               //Vehicle new_v;
-              Vehicle new_v(x, y, vx, vy, s, d, 0.0, 0.0);
-
+              //cout<<"lane_d: "<<d<<endl;
+              Vehicle new_v;
+              new_v.Init(x, y, vx, vy, s, d, 0.0, 0.0);
+              //cout<<"id simulator: "<<id<<endl;
               vehicles.emplace(id,new_v);
 
 
@@ -294,9 +314,10 @@ int main() {
 
               //check if there is a car in my lane
               
-              //cout<<d<<endl;
-              if(d < (2+4*lane+2) && d > (2+4*lane-2))
+              cout<<autonomus_car.get_lane()<<endl;
+              if(d < (2+4*autonomus_car.get_lane()+2) && d > (2+4*autonomus_car.get_lane()-2))
               {
+                cout<<"check"<<endl;
                 //double vx = sensor_fusion[i][3];
                 //double vy = sensor_fusion[i][4];                
                 double check_speed = sqrt(vx*vx+vy*vy);
@@ -307,7 +328,7 @@ int main() {
                 check_car_s += ((double)prev_size*.02*check_speed);
 
                 //check if s values greater than mine and s gap
-                if((check_car_s > car_s) && ((check_car_s-car_s) < 30)) //30mts
+                if((check_car_s > autonomus_car.get_s()) && ((check_car_s-autonomus_car.get_s()) < 30)) //30mts
                 {
                   //TODO: lower speed
                   //TODO: lower reference velocity so we don't crash with car in front of us
@@ -315,7 +336,8 @@ int main() {
                   //ref_vel = 29.5; // mph
                   too_close = true;
                   if (lane > 0){
-                    lane = 0;
+                    autonomus_car.set_lane(0) ;
+                    lane = autonomus_car.get_lane();
 
                   }
 
@@ -328,17 +350,29 @@ int main() {
 
             }
 
-            map<int,vector<map<string,double>>> predictions = {};
+            map<int,vector<map<string,double>>> predictions;
+            
             for(int id=0; id < sensor_fusion.size(); id++)
               {
                 Vehicle vehicle = vehicles.at(id);
+                //cout<<"v_lane: "<<vehicle.get_lane()<<endl;
+                //cout<<"for: "<<id<<endl;
                 vector<map<string,double>> preds = vehicle.generate_predictions();
+                
+                for(auto& p: preds){
+                  std::map<string, double> map = p;
+                  //for(auto& mi : map){ std::cout << mi.first << ": " << mi.second <<endl;}
+                  
+                }
+
+                
+
                 predictions.emplace(id,preds);
 
               }
 
             autonomus_car.update_state(predictions);
-            //autonomus_car.get_state();
+            //cout<<autonomus_car.get_state()<<endl;
 
 
 

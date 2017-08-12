@@ -8,10 +8,10 @@
 #include <iostream>
 #include <thread>
 #include <vector>
-//#include "Eigen-3.3/Eigen/Core"
-//#include "Eigen-3.3/Eigen/QR"
-//#include "json.hpp"
-//#include "spline.h"
+#include "Eigen-3.3/Eigen/Core"
+#include "Eigen-3.3/Eigen/QR"
+#include "json.hpp"
+#include "spline.h"
 #include <string>
 #include <map>
 #include "Snapshot.h"
@@ -26,7 +26,7 @@ public:
   /**
   * Constructor.
   */
-  //Vehicle(){};
+  Vehicle();
 
   /**
  	The data format for each car looks like this, [ id, x, y, vx, vy, s, d]. 
@@ -40,15 +40,15 @@ public:
   //Vehicle(double x, double y, double v, double s, double d, double distance, double acceleration=0);
 
   //Vehicle();
-  Vehicle(double x, double y, double vx, double vy, double s, double d, double distance, double acceleration=0);
+  void Init(double x, double y, double vx, double vy, double s, double d, double distance, double acceleration=0);
 
-
+  double preferred_buffer = 6.0;
   double get_s();
   string get_state();
   int get_lane();
   double get_acc();
   double get_velocity();
-  double get_target_speed();
+  double get_speed_limit();
   double get_max_acc();
 
 
@@ -58,10 +58,10 @@ public:
   void set_velocity(double velocity);
   void set_acc(double acc);
   void set_state(string state);
-  void set_target_speed(double target_speed);
+  void set_speed_limit(double speed_limit);
 
 
-  void configure(double target_speed, int lanes_available, double max_acceleration);
+  void configure(double speed_limit, int lanes_available, double max_acceleration);
 
   //TODO: Refactor comment
   /*
@@ -99,22 +99,24 @@ public:
     """
 
   */
-  void update_state(map<int,vector<map<string,double>>>  predictions);
+  void increment(int dt=1);
+  void update_state(map<int,vector<map<string,double>>>&predictions);
 
   void restore_from_snapshot(Snapshot snapshot);
 
   Snapshot take_snapshot();
-  double max_accel_for_lane(vector<map<string,double>>predictions, int lane, double s);
+  double max_accel_for_lane(map<int,vector<map<string,double>>>&predictions, int lane, double s);
+
   void execute_constant_speed();
-  void execute_keep_lane(vector<map<string,double>>predictions);
-  void execute_lane_change(vector<map<string,double>>predictions, string dir);
-  void execute_prep_lane_change(vector<map<string,double>>predictions, string dir);
+  void execute_keep_lane(map<int,vector<map<string,double>>>&predictions );
+  void execute_lane_change(map<int,vector<map<string,double>>>&predictions , string dir);
+  void execute_prep_lane_change(map<int,vector<map<string,double>>>&predictions , string dir);
 
-  void execute_state(vector<map<string,double>>predictions);
+  void execute_state(map<int,vector<map<string,double>>>&predictions);
 
-  void _trajectory_for_state(string state,vector<map<string,double>>predictions, int horizon=5);
+  vector<Snapshot> _trajectory_for_state(string state,map<int,vector<map<string,double>>>&predictions, int horizon=5);
 
-  string _get_next_state(map<int,vector<map<string,double>>>  predictions);
+  string _get_next_state(map<int,vector<map<string,double>>>&predictions);
 
 
 
@@ -136,7 +138,7 @@ public:
   virtual ~Vehicle(){};
 
 
-private:
+//private:
 
   double _x;
   double _y;
@@ -148,9 +150,10 @@ private:
   int _lane;
   double _acc;
   string _state;
-  double _target_speed;
+  double _speed_limit;
   double _max_acc;
   int _lanes_available;
+
 
 
 
