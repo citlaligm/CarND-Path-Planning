@@ -5,12 +5,13 @@
 #include <iostream>
 #include <thread>
 #include <vector>
-#include "Eigen-3.3/Eigen/Core"
-#include "Eigen-3.3/Eigen/QR"
-#include "json.hpp"
-#include "spline.h"
+//#include "Eigen-3.3/Eigen/Core"
+//#include "Eigen-3.3/Eigen/QR"
+//#include "json.hpp"
+//#include "spline.h"
 #include "vehicle.h"
 #include "Snapshot.h"
+#include "cf.h"
 
 #include <string>
 #include <algorithm>
@@ -21,10 +22,12 @@
 
 
 
+//double SPEED_LIMIT = 49.5;
 
 Vehicle::Vehicle(){}
 
 using namespace std;
+
 
 void Vehicle::Init(double x, double y, double vx, double vy, double s, double d, double distance, double acceleration)
   {
@@ -191,7 +194,7 @@ double Vehicle::max_accel_for_lane(map<int,vector<map<string,double>>>&predictio
       double separation_next = next_position - my_next_position;
       double available_room = separation_next - preferred_buffer;
       max_acc = min(max_acc, available_room);
-      cout<<max_acc<<endl;
+      //cout<<max_acc<<endl;
     }
 
   return max_acc;
@@ -277,6 +280,7 @@ vector<Snapshot> Vehicle::_trajectory_for_state(string state,map<int,vector<map<
   return trajectory;
 }
 
+cf c_f;
 
 string Vehicle::_get_next_state(map<int,vector<map<string,double>>> &predictions)
 {
@@ -294,7 +298,7 @@ string Vehicle::_get_next_state(map<int,vector<map<string,double>>> &predictions
     states.erase(p);
   }
 
-  vector<double> costs;
+  vector<map<string,double>> costs;
   double a = max_accel_for_lane(predictions, get_lane(), get_s());
 
   //cout<<"a: "<<a<<endl;
@@ -312,10 +316,35 @@ string Vehicle::_get_next_state(map<int,vector<map<string,double>>> &predictions
   for(auto state:states)
     {
       vector<Snapshot> trajectory = _trajectory_for_state(state, predictions);
-      //cout<<trajectory.size()<<endl;
+      //cout<<"p_size: "<<predictions.size()<<endl;
+      double cost = c_f.calculate_cost(*this, trajectory, predictions);
+      //cout<<"state: "<<state<<"\tcost: "<<cost<<endl;
+      map<string,double> state_cost;
+      state_cost.emplace(state, cost);
+      costs.push_back(state_cost);
 
     }
-  return states[2];
+
+  double min_cost = pow(10,20);
+  string min_state = get_state();
+
+  for (auto v : costs)
+  {
+    // j is each std::pair<string,string> in each map
+    for (auto s_c : v) 
+    {
+      string state = s_c.first; 
+      double s_cost = s_c.second;
+      if(s_cost < min_cost)
+      {
+        min_state = state;
+        min_cost = s_cost;
+      }
+    } 
+  }
+
+  cout<<"min_state: "<<min_state<<"\tcost: "<<min_cost<<endl;
+  return min_state;
 }
 
 

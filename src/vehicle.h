@@ -8,10 +8,10 @@
 #include <iostream>
 #include <thread>
 #include <vector>
-#include "Eigen-3.3/Eigen/Core"
-#include "Eigen-3.3/Eigen/QR"
-#include "json.hpp"
-#include "spline.h"
+//#include "Eigen-3.3/Eigen/Core"
+//#include "Eigen-3.3/Eigen/QR"
+//#include "json.hpp"
+//#include "spline.h"
 #include <string>
 #include <map>
 #include "Snapshot.h"
@@ -153,6 +153,7 @@ public:
   double _speed_limit;
   double _max_acc;
   int _lanes_available;
+  double goal_s = 10000;
 
 
 
