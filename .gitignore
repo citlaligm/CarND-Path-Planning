@@ -1,2 +1,6 @@
 *.txt
 *.o
+*.cproject
+*.project
+*.settings/
+*.cmake
