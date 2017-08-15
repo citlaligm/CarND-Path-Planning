@@ -13,6 +13,7 @@
 #include <map>
 #include <iostream>
 #include <string>
+#include "road.h"
 
 using namespace std;
 
@@ -30,7 +31,9 @@ double rad2deg(double x) { return x * 180 / pi(); }
 
 // For converting back and forth between mph and meters per second.
 double mph2mtps(double x) { return x * 1609 /3600; }
-double mtps2mph(double x) { return x * 3600 /3600; }
+double mtps2mph(double x) { return x * 3600 /1609; }
+
+//Convert d to lane and back
 
 
 // Checks if the SocketIO event has JSON data.
@@ -211,16 +214,31 @@ int main() {
   }
 
   Vehicle autonomus_car;
+  double speed_limit = 49.5;
+  int lanes_available =  3;
+  double max_acceleration = 0.5; 
+
+  Vehicle old_car;
+//  road simulator;
+  //autonomus_car.configure(speed_limit, lanes_available, max_acceleration);
+  //autonomus_car.Init(0, 0, 0, 0, 0, 1, 0.0, 0.5);
 
 
 
-  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy, &autonomus_car](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+
+  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy, &autonomus_car, &old_car](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
     //auto sdata = string(data).substr(0, length);
     //cout << sdata << endl;
+    bool flag =true;
+
+
+
+
+
     if (length && length > 2 && data[0] == '4' && data[1] == '2') {
 
       auto s = hasData(data);
@@ -233,6 +251,8 @@ int main() {
         if (event == "telemetry") {
           // j[1] is the data JSON object
           
+
+
         	// Main car's localization Data
           	double car_x = j[1]["x"];
           	double car_y = j[1]["y"];
@@ -259,40 +279,36 @@ int main() {
               --------------AV configuration---------------------
             */
 
-            autonomus_car.Init(car_x, car_y, car_vx, car_vy, car_s, car_d, 0.0, 0.0);
-            double speed_limit = 49.5;
-            int lanes_available =  3;
-            double max_acceleration = 0.5; 
+            autonomus_car.Init(car_x, car_y, car_vx, car_vy, car_s, car_d, 0.0, 0.5);
             lane = autonomus_car.get_lane();
 
 
-            //autonomus_car.configure(speed_limit, lanes_available, max_acceleration);
 
             /*
-              --------------AV configuration---------------------
+              --d ------------AV configuration---------------------
             */
 
 
             int prev_size = previous_path_x.size();
             map<int,Vehicle> vehicles;
 
-
+            vector<double> speed_per_lane = {0.0,0.0,0.0,0.0,0.0,0.0};
+            vector<int> vehicles_per_lane = {0,0,0,0,0,0};
+            road simulator;
             if(prev_size > 0)
             {
               autonomus_car.set_s(end_path_s);
               car_s = autonomus_car.get_s();
             }
 
+
             bool too_close = false;
 
-            //find ref_v to use
+            /*
+             --------------SENSOR FUSION---------------------
+             */
             for(int i=0; i < sensor_fusion.size(); i++)
             {
-              /*
-              --------------Vehicle class start---------------------
-              */
-              
-              
               int id = sensor_fusion[i][0];
               double x = sensor_fusion[i][1];
               double y = sensor_fusion[i][2];
@@ -301,99 +317,91 @@ int main() {
               double s = sensor_fusion[i][5]; 
               double d = sensor_fusion[i][6];  
 
-              Vehicle new_v;
+
               //cout<<"lane_d: "<<d<<endl;
-              new_v.Init(x, y, vx, vy, s, d, 0.0, 0.0);
-              //cout<<"id simulator: "<<id<<endl;
-              vehicles.emplace(id,new_v);
+              old_car.Init(x, y, vx, vy, s, d, 0.0, 0.0);
 
+              vehicles.emplace(id,old_car);
 
-              /*
-              --------------Vehicle class finish ---------------------
-              */
+              int old_lane = old_car._lane;
 
-
-              //check if there is a car in my lane
-              
-              //cout<<autonomus_car.get_lane()<<endl;
-              // if(d < (2+4*lane+2) && d > (2+4*lane-2))
-              // {
-              //   //cout<<"check"<<endl;
-              //   //double vx = sensor_fusion[i][3];
-              //   //double vy = sensor_fusion[i][4];                
-              //   double check_speed = sqrt(vx*vx+vy*vy);
-              //   double check_car_s = sensor_fusion[i][5];
-
-              //   //if using previous points can project s value outwards on time
-              //   //check where the car is going to be in the future
-              //   check_car_s += ((double)prev_size*.02*check_speed);
-
-              //   //check if s values greater than mine and s gap
-              //   if((check_car_s > car_s) && ((check_car_s-car_s) < 1)) //30mts
-              //   {
-              //     //TODO: lower speed
-              //     //TODO: lower reference velocity so we don't crash with car in front of us
-              //     //TODO: flag to try to change lanes
-              //     //ref_vel = 29.5; // mph
-              //     too_close = true;
-              //     if (lane > 0){
-              //       autonomus_car.set_lane(0) ;
-              //       lane = autonomus_car.get_lane();
-
-
-              //     }
-
-              //   }
-
-
-              // }
-
-
-
-            }
-
-            map<int,vector<map<string,double>>> predictions;
-            
-            for(int id=0; id < sensor_fusion.size(); id++)
+              //at the beggining there are some random numbers, so make sure it makes d value makes sense
+              if(old_lane>=0)
               {
-                Vehicle vehicle = vehicles.at(id);
-                //cout<<"v_lane: "<<vehicle.get_lane()<<endl;
-                //cout<<"for: "<<id<<endl;
-                vector<map<string,double>> preds = vehicle.generate_predictions();
-                
-                for(auto& p: preds){
-                  std::map<string, double> map = p;
-                  //for(auto& mi : map){ std::cout << mi.first << ": " << mi.second <<endl;}
-                  
-                }
-
-                
-
-                predictions.emplace(id,preds);
-
+                simulator.speed_per_lane[old_lane] += mtps2mph(old_car._v);
+                simulator.vehicles_per_lane[old_lane] += 1;
               }
+            }
+            /*
+            --------------SENSOR FUSION---------------------
+            */
+            //cout<<simulator.vehicles_per_lane[0]<<"  "<<simulator.vehicles_per_lane[1]<<"  "<<simulator.vehicles_per_lane[2] <<endl;
+            //Calculate the average speed of the cars in each lane
+            simulator.avg_speed_lanes();
+            int index=0;
+            for(auto& speed :simulator.speed_per_lane)
+            {
+               cout<<"lane: "<<index<<"\t speed: "<<speed<<endl;
+                ++index;
+             }
 
-            autonomus_car.update_state(predictions);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//            map<int,vector<map<string,double>>> predictions;
+//
+//            for(int id=0; id < sensor_fusion.size(); id++)
+//              {
+//                Vehicle vehicle = vehicles.at(id);
+//                //cout<<"v_lane: "<<vehicle.get_lane()<<endl;
+//                //cout<<"for: "<<id<<endl;
+//                vector<map<string,double>> preds = vehicle.generate_predictions();
+//
+//                for(auto& p: preds){
+//                  std::map<string, double> map = p;
+//                  //for(auto& mi : map){ std::cout << mi.first << ": " << mi.second <<endl;}
+//
+//                }
+//
+//
+//
+//                predictions.emplace(id,preds);
+//
+//              }
+
+            //autonomus_car.update_state(predictions);
             //cout<<autonomus_car.get_state()<<endl;
 
-            autonomus_car.execute_state(predictions);
+            //autonomus_car.execute_state(predictions);
             //cout<<autonomus_car.get_state()<<endl;
-
-            lane = autonomus_car.get_lane();
+            // autonomus_car.increment();
+            //lane = autonomus_car.get_lane();
 
             //acceleration of 5m/s2
-            if (too_close)
-            {
-              ref_vel-= 0.5;
-              //autonomus_car.increment();
-            }
-            else if(ref_vel < 49.5)
-            {
-              ref_vel += 0.5;
-            }
+             if (too_close)
+             {
+               ref_vel-= 0.5;
+               //autonomus_car.increment();
+             }
+             else if(ref_vel < 49.5)
+             {
+               ref_vel += 0.5;
+             }
+            //ref_vel += autonomus_car.get_acc();
 
-
-
+            //ref_vel = autonomus_car.get_velocity();
+            //cout<<"ref_vel: "<<ref_vel<<"\tauto_a: "<<autonomus_car.get_acc()<<endl;
 
 
 

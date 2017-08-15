@@ -19,6 +19,7 @@
 
 
 
+
 using namespace std;
 
 class Vehicle {
@@ -102,12 +103,13 @@ public:
   void increment(int dt=1);
   void update_state(map<int,vector<map<string,double>>>&predictions);
 
-  void restore_from_snapshot(Snapshot snapshot);
+  void restore_from_snapshot(Snapshot& snapshot);
 
   Snapshot take_snapshot();
-  double max_accel_for_lane(map<int,vector<map<string,double>>>&predictions, int lane, double s);
+  double max_accel_for_lane(map<int,vector<map<string,double>>>predictions, int lane, double s);
 
   void execute_constant_speed();
+  void execute_init_ramp();
   void execute_keep_lane(map<int,vector<map<string,double>>>&predictions );
   void execute_lane_change(map<int,vector<map<string,double>>>&predictions , string dir);
   void execute_prep_lane_change(map<int,vector<map<string,double>>>&predictions , string dir);
