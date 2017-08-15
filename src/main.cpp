@@ -176,6 +176,52 @@ vector<double> getXY(double s, double d, vector<double> maps_s, vector<double> m
 
 }
 
+vector<int> filter_predictions_by_lane(map<int,Vehicle>& vehicles, int current_lane)
+{
+  vector<int>id_vector;
+  for(auto&v : vehicles)
+  {
+      int id = v.first;
+      Vehicle boring_car = v.second;
+
+      if (boring_car._lane == current_lane)
+      {
+        id_vector.push_back(id);
+      }
+  }
+
+  return id_vector;
+}
+
+double check_collision(map<int,Vehicle>& vehicles, vector<int>ids_vector, Vehicle& AV, double distance, double current_s)
+{
+  double closest = 9999;
+  for(auto&v : vehicles)
+  {
+    int id = v.first;
+    Vehicle boring_car = v.second;
+
+    if(std::find(ids_vector.begin(), ids_vector.end(), id)!=ids_vector.end())
+    {
+      double speed = boring_car._v;
+      double s_start = boring_car._s;
+      double s_end = s_start + distance * speed;
+
+      double diff_start = fabs(s_start - AV._s);
+
+      if(diff_start<closest){closest = diff_start;}
+
+      double diff_end = fabs(s_end - AV._s);
+
+      if(diff_end<closest){closest = diff_end;}
+
+    }
+
+  }
+  return closest;
+}
+
+
 int main() {
   uWS::Hub h;
 
@@ -278,12 +324,8 @@ int main() {
             /*
               --------------AV configuration---------------------
             */
-
             autonomus_car.Init(car_x, car_y, car_vx, car_vy, car_s, car_d, 0.0, 0.5);
             lane = autonomus_car.get_lane();
-
-
-
             /*
               --d ------------AV configuration---------------------
             */
@@ -325,86 +367,140 @@ int main() {
 
               int old_lane = old_car._lane;
 
-              //at the beggining there are some random numbers, so make sure it makes d value makes sense
-              if(old_lane>=0)
+              //at the beginning there are some random numbers, so make sure it makes d value makes sense
+              if(old_lane>=0 && old_lane <=2)
               {
                 simulator.speed_per_lane[old_lane] += mtps2mph(old_car._v);
                 simulator.vehicles_per_lane[old_lane] += 1;
               }
             }
+
+
+            simulator.avg_speed_lanes();
+
             /*
             --------------SENSOR FUSION---------------------
             */
-            //cout<<simulator.vehicles_per_lane[0]<<"  "<<simulator.vehicles_per_lane[1]<<"  "<<simulator.vehicles_per_lane[2] <<endl;
-            //Calculate the average speed of the cars in each lane
-            simulator.avg_speed_lanes();
-            int index=0;
-            for(auto& speed :simulator.speed_per_lane)
+
+
+            //check which vehicles are in my path
+            //cout<<vehicles.size()<<endl;
+
+            double closest_speed = autonomus_car._speed_limit;
+            for(auto&v : vehicles)
             {
-               cout<<"lane: "<<index<<"\t speed: "<<speed<<endl;
-                ++index;
+                int id = v.first;
+                Vehicle boring_car = v.second;
+                boring_car._s = boring_car._s + ((double)prev_size*0.02*boring_car._v);
+
+                if(lane == boring_car._lane )
+                {
+                  if(boring_car._s > car_s && (boring_car._s - car_s) < 30.0 )
+                  {
+                    //cout<<"boring_s: "<<boring_car._s<<"\tcar_s:"<<car_s <<"\tdiff: "<<(boring_car._s - car_s)<<endl;
+                    too_close = true;
+                    closest_speed = boring_car._v;
+                  }
+                }
              }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-//            map<int,vector<map<string,double>>> predictions;
-//
-//            for(int id=0; id < sensor_fusion.size(); id++)
-//              {
-//                Vehicle vehicle = vehicles.at(id);
-//                //cout<<"v_lane: "<<vehicle.get_lane()<<endl;
-//                //cout<<"for: "<<id<<endl;
-//                vector<map<string,double>> preds = vehicle.generate_predictions();
-//
-//                for(auto& p: preds){
-//                  std::map<string, double> map = p;
-//                  //for(auto& mi : map){ std::cout << mi.first << ": " << mi.second <<endl;}
-//
-//                }
-//
-//
-//
-//                predictions.emplace(id,preds);
-//
-//              }
-
-            //autonomus_car.update_state(predictions);
-            //cout<<autonomus_car.get_state()<<endl;
-
-            //autonomus_car.execute_state(predictions);
-            //cout<<autonomus_car.get_state()<<endl;
-            // autonomus_car.increment();
-            //lane = autonomus_car.get_lane();
-
-            //acceleration of 5m/s2
-             if (too_close)
+            if (too_close)
              {
-               ref_vel-= 0.5;
-               //autonomus_car.increment();
+               cout<<"*****************************************"<<endl;
+               vector<string> states = {"KL","LCL","LCR"};
+               if(lane == 0)
+               {
+                 auto p = find (states.begin(), states.end(),"LCL");
+                 states.erase(p);
+               }
+               else if(lane == 2)
+               {
+                   auto p = find (states.begin(), states.end(),"LCR");
+                   states.erase(p);
+               }
+
+               int best_lane = autonomus_car._lane;
+               double best_cost = 1.79769e+308; //maximum number represented by a double
+               string best_state ="";
+
+               for(auto&state : states)
+               {
+                 int current_lane;
+                 if (state == "KL"){current_lane = autonomus_car._lane;}
+                 else if (state == "LCL"){current_lane = autonomus_car._lane -1;}
+                 else if (state == "LCR"){current_lane = autonomus_car._lane + 1;}
+                 else{current_lane = 100; cout<<"error"<<endl;}
+
+
+                 double cost = 0.0;
+                 double cost_change_lane = 0;
+                 double cost_nearest = 0;
+
+                 //Penalizes changes of lanes
+                 if(autonomus_car._state != state)
+                 {
+                   cost_change_lane = 1000;
+                   cost += cost_change_lane;
+                 }
+
+
+                 //Penalizes speeding
+                 double speed_in_lane = simulator.speed_per_lane[current_lane];
+                 double cost_speed = ((speed_in_lane - ref_vel)/speed_in_lane)*2;
+                 double cost_speed_normalized = 2/(1.0+exp(-cost_speed))-1.0;
+                 cost += cost_speed_normalized * 1000;
+
+
+                 //Penalizes collision and distance less than the desired buffer
+                 vector<int>ids_vector = filter_predictions_by_lane(vehicles,current_lane);
+
+                 double nearest = check_collision(vehicles,ids_vector, autonomus_car , 0.02*prev_size, autonomus_car._s);
+
+                 double buffer = 10;
+                 if(nearest< buffer)
+                 {
+                   cost_nearest = pow(10,5);
+                   cost+= cost_nearest;
+
+                 }
+
+                 double cost_collision_buffer = (2*buffer/nearest);
+                 double cost_collision_buffer_normalized = 2/(1.0+exp(-cost_collision_buffer))-1.0;
+                 cost += 1000*cost_collision_buffer_normalized;
+
+                 //cout<<"state: "<<state<<"  change_cost: "<<cost_change_lane<<"  cost_speed: "<<cost_speed_normalized<<"  cost_nearest: "<<cost_nearest<<"  cost_collision: "<<cost_collision_buffer_normalized<<"  cost: "<<cost<<endl;
+
+
+                 //cout<<"state: "<<state<<"\tcurrent_lane: "<<current_lane<<"\tchange_cost: "<<cost_change_lane<<endl;
+                 //cout<<"state: "<<state<<"\t speed_lane: "<<speed_in_lane<<"\t speed_cost: "<<cost_speed_normalized<<endl;
+                 //cout<<"state: "<<state<<"\t cost_nearest: "<<cost_nearest<<endl;
+                 //cout<<"state: "<<state<<"\t nearest: "<<nearest<<"\t cost_collision_buffer: "<< cost_collision_buffer_normalized<<endl;
+
+                 if (cost< best_cost)
+                 {
+                   best_lane = current_lane;
+                   best_cost = cost;
+                   best_state = state;
+
+                 }
+               }
+
+               cout<<"state: "<<best_state<<"  cost:"<<best_cost<<"  lane: "<<best_lane<<endl;
+               if(best_lane == lane && (ref_vel > simulator.vehicles_per_lane[lane] || closest_speed))
+               {
+                 ref_vel-= 0.5;
+                 lane = best_lane;
+               }
+
+               lane = best_lane;
              }
-             else if(ref_vel < 49.5)
+
+             //Let's go. Nothing is going on, keep going at speed limit.
+             else if(ref_vel < autonomus_car._speed_limit)
              {
                ref_vel += 0.5;
              }
-            //ref_vel += autonomus_car.get_acc();
-
-            //ref_vel = autonomus_car.get_velocity();
-            //cout<<"ref_vel: "<<ref_vel<<"\tauto_a: "<<autonomus_car.get_acc()<<endl;
-
-
-
 
 
             //create a list of widely spaced (x,y) waypoints, evenly distributed at 30m

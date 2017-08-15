@@ -42,7 +42,7 @@ void Vehicle::Init(double x, double y, double vx, double vy, double s, double d,
 
   	_lane = int(floor(_d/LANE_WIDTH));
   	_acc = acceleration;
-  	_state = "CS";
+  	_state = "KL";
   	_speed_limit = 49.5;
   	_lanes_available = 3;
   	_max_acc = 0.5;

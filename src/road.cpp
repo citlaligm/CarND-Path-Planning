@@ -14,8 +14,8 @@ using namespace std;
 road::road() {
   // TODO Auto-generated constructor stub
   int num_lanes = 6;
-  vector<double> speed_per_lane = {0.0,0.0,0.0,0.0,0.0,0.0};
-  vector<int> vehicles_per_lane = {0,0,0,0,0,0};
+  vector<double> speed_per_lane = {0.0,0.0,0.0};
+  vector<int> vehicles_per_lane = {0,0,0};
   double max_speed = 49.5;
 }
 
