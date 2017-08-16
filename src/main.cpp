@@ -481,6 +481,8 @@ int main() {
                  double cost_collision_buffer_normalized = 2/(1.0+exp(-cost_collision_buffer))-1.0;
                  cost += 1000*cost_collision_buffer_normalized;
 
+                 //cout<<"state: "<<state <<"\tlane_cost: "<< cost_change_lane<<"\t cost_speed: "<<cost_speed_normalized <<"\t collision: "<< cost_collision<<"\t buffer:"<< cost_collision_buffer_normalized<<endl;
+
                  //if current state has the lowest cost then choose it
                  if (cost< best_cost)
                  {
@@ -490,8 +492,9 @@ int main() {
 
                  }
                }
-               cout<<"+++++++++++++++++++++++++++++++++++++++++"<<endl;
+
                cout<<"state: "<<best_state<<"  cost:"<<best_cost<<"  lane: "<<best_lane<<endl;
+               cout<<"+++++++++++++++++++++++++++++++++++++++++"<<endl;
 
 
                //if the current state is the best and speed of the current lane is lower than the current speed or the speed of the car in front
