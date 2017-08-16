@@ -265,11 +265,6 @@ int main() {
   double max_acceleration = 0.5; 
 
   Vehicle old_car;
-//  road simulator;
-  //autonomus_car.configure(speed_limit, lanes_available, max_acceleration);
-  //autonomus_car.Init(0, 0, 0, 0, 0, 1, 0.0, 0.5);
-
-
 
 
   h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy, &autonomus_car, &old_car](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
@@ -384,8 +379,6 @@ int main() {
 
 
             //check which vehicles are in my path
-            //cout<<vehicles.size()<<endl;
-
             double closest_speed = autonomus_car._speed_limit;
             for(auto&v : vehicles)
             {
@@ -397,7 +390,6 @@ int main() {
                 {
                   if(boring_car._s > car_s && (boring_car._s - car_s) < 30.0 )
                   {
-                    //cout<<"boring_s: "<<boring_car._s<<"\tcar_s:"<<car_s <<"\tdiff: "<<(boring_car._s - car_s)<<endl;
                     too_close = true;
                     closest_speed = boring_car._v;
                   }
@@ -407,7 +399,8 @@ int main() {
 
             if (too_close)
              {
-               cout<<"*****************************************"<<endl;
+
+               //Remove states that are not possible.
                vector<string> states = {"KL","LCL","LCR"};
                if(lane == 0)
                {
@@ -424,8 +417,12 @@ int main() {
                double best_cost = 1.79769e+308; //maximum number represented by a double
                string best_state ="";
 
+                /*
+                 * COST FUNCTIONS
+                 */
                for(auto&state : states)
                {
+
                  int current_lane;
                  if (state == "KL"){current_lane = autonomus_car._lane;}
                  else if (state == "LCL"){current_lane = autonomus_car._lane -1;}
@@ -455,10 +452,12 @@ int main() {
                  //Penalizes collision and distance less than the desired buffer
                  vector<int>ids_vector = filter_predictions_by_lane(vehicles,current_lane);
 
+                 //Check if theres is a possible collision
                  double nearest = check_collision(vehicles,ids_vector, autonomus_car , 0.02*prev_size, autonomus_car._s);
 
                  double buffer = 10;
-                 if(nearest< buffer)
+                 //If it's too close, better
+                 if(nearest < buffer)
                  {
                    cost_nearest = pow(10,5);
                    cost+= cost_nearest;
@@ -469,14 +468,7 @@ int main() {
                  double cost_collision_buffer_normalized = 2/(1.0+exp(-cost_collision_buffer))-1.0;
                  cost += 1000*cost_collision_buffer_normalized;
 
-                 //cout<<"state: "<<state<<"  change_cost: "<<cost_change_lane<<"  cost_speed: "<<cost_speed_normalized<<"  cost_nearest: "<<cost_nearest<<"  cost_collision: "<<cost_collision_buffer_normalized<<"  cost: "<<cost<<endl;
-
-
-                 //cout<<"state: "<<state<<"\tcurrent_lane: "<<current_lane<<"\tchange_cost: "<<cost_change_lane<<endl;
-                 //cout<<"state: "<<state<<"\t speed_lane: "<<speed_in_lane<<"\t speed_cost: "<<cost_speed_normalized<<endl;
-                 //cout<<"state: "<<state<<"\t cost_nearest: "<<cost_nearest<<endl;
-                 //cout<<"state: "<<state<<"\t nearest: "<<nearest<<"\t cost_collision_buffer: "<< cost_collision_buffer_normalized<<endl;
-
+                 //if current state has the lowest cost then choose it
                  if (cost< best_cost)
                  {
                    best_lane = current_lane;
@@ -485,14 +477,19 @@ int main() {
 
                  }
                }
-
+               cout<<"+++++++++++++++++++++++++++++++++++++++++"<<endl;
                cout<<"state: "<<best_state<<"  cost:"<<best_cost<<"  lane: "<<best_lane<<endl;
+
+
+               //if the current state is the best and speed of the current lane is lower than the current speed or the speed of the car in front
+               // SLOW DOWN!
                if(best_lane == lane && (ref_vel > simulator.vehicles_per_lane[lane] || closest_speed))
                {
                  ref_vel-= 0.5;
                  lane = best_lane;
                }
 
+               //The best is to change lane
                lane = best_lane;
              }
 
@@ -504,8 +501,8 @@ int main() {
 
 
             //create a list of widely spaced (x,y) waypoints, evenly distributed at 30m
-            //later we will interpolate these waipoints with a spline and fill it with more points that
-            //control
+            //later we will interpolate these waypoints with a spline and fill it with more points that control
+            //
             std::vector<double> ptsx;
             std::vector<double> ptsy;
 
@@ -578,9 +575,6 @@ int main() {
             //set (x,y) points to the spline
             s.set_points(ptsx,ptsy);
 
-
-
-
           	json msgJson;
 
             
@@ -635,15 +629,6 @@ int main() {
 
 
             }
-
-
-
-
-
-
-
-
-
 
           	msgJson["next_x"] = next_x_vals;
           	msgJson["next_y"] = next_y_vals;
