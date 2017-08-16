@@ -176,6 +176,10 @@ vector<double> getXY(double s, double d, vector<double> maps_s, vector<double> m
 
 }
 
+/*
+ * Obtain IDs for vehicles in the same lane as the AV.
+ */
+
 vector<int> filter_predictions_by_lane(map<int,Vehicle>& vehicles, int current_lane)
 {
   vector<int>id_vector;
@@ -192,6 +196,11 @@ vector<int> filter_predictions_by_lane(map<int,Vehicle>& vehicles, int current_l
 
   return id_vector;
 }
+
+/*
+ * Determine the closest distance between a car and the AV.
+ */
+
 
 double check_collision(map<int,Vehicle>& vehicles, vector<int>ids_vector, Vehicle& AV, double distance, double current_s)
 {
@@ -355,9 +364,10 @@ int main() {
               double d = sensor_fusion[i][6];  
 
 
-              //cout<<"lane_d: "<<d<<endl;
+              //Initialize old_cars attributes
               old_car.Init(x, y, vx, vy, s, d, 0.0, 0.0);
 
+              //Add them to a map with ID as key.
               vehicles.emplace(id,old_car);
 
               int old_lane = old_car._lane;
@@ -388,6 +398,7 @@ int main() {
 
                 if(lane == boring_car._lane )
                 {
+                  //Check if a car is a distance less that 30 meters and obtain its speed. Raise flag to True
                   if(boring_car._s > car_s && (boring_car._s - car_s) < 30.0 )
                   {
                     too_close = true;
@@ -432,7 +443,7 @@ int main() {
 
                  double cost = 0.0;
                  double cost_change_lane = 0;
-                 double cost_nearest = 0;
+                 double cost_collision = 0;
 
                  //Penalizes changes of lanes
                  if(autonomus_car._state != state)
@@ -442,29 +453,31 @@ int main() {
                  }
 
 
-                 //Penalizes speeding
+                 //Penalizes speed. Drive at the traffic speed. Safety.
                  double speed_in_lane = simulator.speed_per_lane[current_lane];
                  double cost_speed = ((speed_in_lane - ref_vel)/speed_in_lane)*2;
                  double cost_speed_normalized = 2/(1.0+exp(-cost_speed))-1.0;
                  cost += cost_speed_normalized * 1000;
 
 
-                 //Penalizes collision and distance less than the desired buffer
+                 //Penalizes collision and distance less than the desired buffer to keep us far from other vehicles
                  vector<int>ids_vector = filter_predictions_by_lane(vehicles,current_lane);
 
-                 //Check if theres is a possible collision
-                 double nearest = check_collision(vehicles,ids_vector, autonomus_car , 0.02*prev_size, autonomus_car._s);
+                 //Check if there is a possible collision
+                 double closest_dist = check_collision(vehicles,ids_vector, autonomus_car , 0.02*prev_size, autonomus_car._s);
 
                  double buffer = 10;
-                 //If it's too close, better
-                 if(nearest < buffer)
+
+                 //It's too close.
+                 if(closest_dist < buffer)
                  {
-                   cost_nearest = pow(10,5);
-                   cost+= cost_nearest;
+                   //Need to penalize collision with a high cost.
+                   cost_collision = pow(10,5);
+                   cost+= cost_collision;
 
                  }
 
-                 double cost_collision_buffer = (2*buffer/nearest);
+                 double cost_collision_buffer = (2*buffer/closest_dist);
                  double cost_collision_buffer_normalized = 2/(1.0+exp(-cost_collision_buffer))-1.0;
                  cost += 1000*cost_collision_buffer_normalized;
 
@@ -486,14 +499,14 @@ int main() {
                if(best_lane == lane && (ref_vel > simulator.vehicles_per_lane[lane] || closest_speed))
                {
                  ref_vel-= 0.5;
-                 lane = best_lane;
+                 //lane = best_lane;
                }
 
                //The best is to change lane
                lane = best_lane;
              }
 
-             //Let's go. Nothing is going on, keep going at speed limit.
+             //Let's go. Accelerate to achieve speed limit at 5m/s^2. Avoid jerk.
              else if(ref_vel < autonomus_car._speed_limit)
              {
                ref_vel += 0.5;
