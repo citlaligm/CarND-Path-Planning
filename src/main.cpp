@@ -477,9 +477,9 @@ int main() {
 
                  }
 
-                 double cost_collision_buffer = (2*buffer/closest_dist);
-                 double cost_collision_buffer_normalized = 2/(1.0+exp(-cost_collision_buffer))-1.0;
-                 cost += 1000*cost_collision_buffer_normalized;
+                 double cost_buffer = (2*buffer/closest_dist);
+                 double costn_buffer_normalized = 2/(1.0+exp(-cost_buffer))-1.0;
+                 cost += 1000*costn_buffer_normalized;
 
                  //cout<<"state: "<<state <<"\tlane_cost: "<< cost_change_lane<<"\t cost_speed: "<<cost_speed_normalized <<"\t collision: "<< cost_collision<<"\t buffer:"<< cost_collision_buffer_normalized<<endl;
 
@@ -499,7 +499,7 @@ int main() {
 
                //if the current state is the best and speed of the current lane is lower than the current speed or the speed of the car in front
                // SLOW DOWN!
-               if(best_lane == lane && (ref_vel > simulator.vehicles_per_lane[lane] || closest_speed))
+               if(best_lane == lane && (ref_vel > simulator.speed_per_lane[lane] || ref_vel > closest_speed))
                {
                  ref_vel-= 0.5;
                  //lane = best_lane;
